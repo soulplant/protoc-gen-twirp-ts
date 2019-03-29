@@ -12,6 +12,20 @@ message TestMessage {
   }
 
   message NestedSibling {
-    
+
   }
+}
+
+message Foo {
+  int64 id = 1;
+  string name = 2;
+}
+
+message GetFooRequest {
+  Foo foo = 1;
+}
+message GetFooResponse {}
+
+service TheService {
+  rpc GetFoo (GetFooRequest) returns (GetFooResponse);
 }

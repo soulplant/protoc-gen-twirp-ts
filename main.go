@@ -61,6 +61,13 @@ func main() {
 				fmt.Fprintf(o, "%s(%s) type: %s\n", spacing, strings.Join(parent, "."), t.GetName())
 			}, nil, t)
 		}
+		for _, s := range f.GetService() {
+			fmt.Fprintf(o, "service %s\n", s.GetName())
+			for _, m := range s.GetMethod() {
+				fmt.Fprintf(o, "  %s\n", m.GetName())
+			}
+		}
+		fmt.Fprintln(o)
 	}
 
 	fmt.Fprintf(o, "opts %s\n", req.GetParameter())
