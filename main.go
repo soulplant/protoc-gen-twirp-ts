@@ -16,7 +16,15 @@ import (
 )
 
 type file struct {
-	buf bytes.Buffer
+	buf *bytes.Buffer
+}
+
+func (f file) Printf(format string, args ...interface{}) {
+	fmt.Fprintf(f.buf, format, args...)
+}
+
+func (f file) String() string {
+	return f.buf.String()
 }
 
 func makeFile(name, content string) *plugin.CodeGeneratorResponse_File {
@@ -46,10 +54,9 @@ func main() {
 		log.Fatalf("Unmarshal: %s\n", err)
 	}
 
-	o := &bytes.Buffer{}
+	o := &file{buf: bytes.NewBufferString("")}
 
 	for _, f := range req.GetProtoFile() {
-		fmt.Fprintf(o, "file: %s\n", f.GetName())
 		for _, t := range f.GetMessageType() {
 			walkType(func(path []*descriptor.DescriptorProto, t *descriptor.DescriptorProto) {
 				spacing := "  "
@@ -58,19 +65,19 @@ func main() {
 					spacing += "  "
 					parent = append(parent, p.GetName())
 				}
-				fmt.Fprintf(o, "%s(%s) type: %s\n", spacing, strings.Join(parent, "."), t.GetName())
+				o.Printf("%s(%s) type: %s\n", spacing, strings.Join(parent, "."), t.GetName())
 			}, nil, t)
 		}
 		for _, s := range f.GetService() {
-			fmt.Fprintf(o, "service %s\n", s.GetName())
+			o.Printf("service %s\n", s.GetName())
 			for _, m := range s.GetMethod() {
-				fmt.Fprintf(o, "  %s\n", m.GetName())
+				o.Printf("  %s\n", m.GetName())
 			}
 		}
-		fmt.Fprintln(o)
+		o.Printf("\n")
 	}
 
-	fmt.Fprintf(o, "opts %s\n", req.GetParameter())
+	o.Printf("opts %s\n", req.GetParameter())
 
 	res := &plugin.CodeGeneratorResponse{
 		File: []*plugin.CodeGeneratorResponse_File{
