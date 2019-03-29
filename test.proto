@@ -1,0 +1,17 @@
+syntax = "proto3";
+
+package test;
+
+message TestMessage {
+  int32 one = 1;
+
+  message NestedOuter {
+    message NestedInner {
+
+    }
+  }
+
+  message NestedSibling {
+    
+  }
+}
