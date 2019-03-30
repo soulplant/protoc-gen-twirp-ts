@@ -1,19 +1,31 @@
 syntax = "proto3";
 
-package test;
+package api;
 
+// This is a comment
+// for TestMessage.
 message TestMessage {
+  // Some number.
   int32 one = 1;
 
   message NestedOuter {
     message NestedInner {
-
+      int32 innermost = 1;
     }
+    NestedInner container = 1;
   }
 
   message NestedSibling {
 
   }
+
+  NestedOuter outer = 2;
+}
+
+message NestedOuter {
+  int32 a = 3;
+  int32 b = 2;
+  int32 c = 1;
 }
 
 message Foo {
