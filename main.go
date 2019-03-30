@@ -15,6 +15,11 @@ import (
 	plugin "github.com/golang/protobuf/protoc-gen-go/plugin"
 )
 
+// TODO
+// - [ ] Make comments on service methods work
+// - [ ] Implement service
+// - [ ] Implement enums
+
 type file struct {
 	buf *bytes.Buffer
 }
@@ -221,17 +226,22 @@ func indentLines(n int, lines string) string {
 	return strings.Join(parts, "\n")
 }
 
+func qualifiedToCanonical(typeName string) string {
+	pieces := strings.Split(typeName[1:], ".")
+	return packagePrefix(pieces[0]) + strings.Join(pieces[1:], "_")
+}
+
 // Generate a response.
 func (g *Gen) Generate(fd *d.FileDescriptorProto) *plugin.CodeGeneratorResponse {
 	o := &file{buf: bytes.NewBufferString("")}
 	for _, loc := range fd.GetSourceCodeInfo().GetLocation() {
 		name := locateInFile(fd, loc)
 		if name == "" {
-			o.Printf("// No info for %v\n", loc)
+			// o.Printf("// No info for %v\n", loc)
 			continue
 		}
-		o.Printf("// Adding info for %s\n", name)
-		o.Printf("//    %v\n", loc)
+		// o.Printf("// Adding info for %s\n", name)
+		// o.Printf("//    %v\n", loc)
 		if oldLoc, ok := g.lm[name]; ok {
 			log.Fatalf("clobbering %s loc %v with %v", name, oldLoc, loc)
 		}
@@ -268,20 +278,21 @@ func (g *Gen) Generate(fd *d.FileDescriptorProto) *plugin.CodeGeneratorResponse 
 			o.Printf(indentLines(1, fmt.Sprintf("%s%s?: %s;", comment, f.GetName(), g.GetTypeName(f))))
 			o.Printf("\n")
 		}
-		o.Printf("};\n")
+		o.Printf("};\n\n")
 	}
 
 	for _, s := range fd.GetService() {
-		o.Printf("service %s\n", s.GetName())
+		o.Printf("export interface %s {\n", s.GetName())
 		for _, m := range s.GetMethod() {
-			o.Printf("  %s\n", m.GetName())
+			o.Printf("  %s(req: %s): Promise<%s>;\n", m.GetName(), qualifiedToCanonical(m.GetInputType()), qualifiedToCanonical(m.GetOutputType()))
 		}
+		o.Printf("}\n")
 	}
 	o.Printf("\n")
 
 	res := &plugin.CodeGeneratorResponse{
 		File: []*plugin.CodeGeneratorResponse_File{
-			makeFile("out.txt", o.String()),
+			makeFile("out.ts", o.String()),
 		},
 	}
 	return res
@@ -319,12 +330,28 @@ func (g *Gen) GetTypeName(f *d.FieldDescriptorProto) string {
 	case d.FieldDescriptorProto_TYPE_BOOL:
 		return "boolean"
 	case d.FieldDescriptorProto_TYPE_MESSAGE:
-		pieces := strings.Split(f.GetTypeName(), ".")[1:]
-		packageName := strings.ToUpper(pieces[0][0:1]) + pieces[0][1:]
-		typeName := strings.Join(pieces[1:], "_")
-		return packageName + typeName
+		wk := wellKnownToTS(f.GetTypeName())
+		if wk != "" {
+			return wk
+		}
+		return qualifiedToCanonical(f.GetTypeName())
+	case d.FieldDescriptorProto_TYPE_ENUM:
+		return "number /* fix me */"
 	default:
 		panic(fmt.Sprintf("GetTypeName: unknown type %s", f.GetType()))
+	}
+}
+
+func wellKnownToTS(typeName string) string {
+	switch typeName {
+	case ".google.protobuf.Timestamp":
+		return "string"
+	case ".google.protobuf.Struct":
+		return "{}"
+	case ".google.protobuf.FieldMask":
+		return "string[]"
+	default:
+		return ""
 	}
 }
 
@@ -339,11 +366,16 @@ func main() {
 		log.Fatalf("Unmarshal: %s\n", err)
 	}
 
-	g := NewGen()
-	res := g.Generate(req.GetProtoFile()[0])
-	outBuf, err := proto.Marshal(res)
-	if err != nil {
-		log.Fatalf("Marshal: %s\n", err)
+	for _, f := range req.GetProtoFile() {
+		if strings.HasPrefix(f.GetName(), "google/protobuf") {
+			continue
+		}
+		g := NewGen()
+		res := g.Generate(f)
+		outBuf, err := proto.Marshal(res)
+		if err != nil {
+			log.Fatalf("Marshal: %s\n", err)
+		}
+		io.Copy(os.Stdout, bytes.NewBuffer(outBuf))
 	}
-	io.Copy(os.Stdout, bytes.NewBuffer(outBuf))
 }

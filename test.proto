@@ -1,54 +1,1223 @@
 syntax = "proto3";
 
+import "google/protobuf/struct.proto";
+import "google/protobuf/timestamp.proto";
+import "google/protobuf/field_mask.proto";
+
 package api;
+// option go_package = "gitlab.com/learnable/learnable/server/api";
 
-// This is a comment
-// for TestMessage.
-message TestMessage {
-  // Some number.
-  int32 one = 1;
-
-  // I contain a nested inner.
-  message NestedOuter {
-    // I'm a deeply nested message.
-    message NestedInner {
-      // I'm a deeply nested field.
-      int32 innermost = 1;
-    }
-    // I contain things.
-    NestedInner container = 1;
-  }
-
-  // Sibling to NestedOuter.
-  message NestedSibling {
-
-  }
-
-  // NestedOuter.
-  NestedOuter outer = 2;
+// Whether the section is unpublished, published or coming soon.
+enum Published {
+  UNKNOWN_PUBLISHED_STATE = 0;
+  UNPUBLISHED = 1;
+  COMING_SOON = 2;
+  PUBLISHED = 3;
 }
 
-// Top level NestedOuter, never instantiated.
-message NestedOuter {
-  // A is third.
-  int32 a = 3;
-  // B is second.
-  int32 b = 2;
-  // C is first.
-  int32 c = 1;
+// A section is the smallest addressable unit of content in Learnable.
+// Next field: 20.
+message Section {
+  // The ID.
+  int64 id = 1;
+
+  // The id of the lesson that this section is a part of.
+  int64 parent = 2;
+  int64 parent_id = 19;
+
+  // The position this section has with its parent lesson.
+  int32 position = 3;
+
+  // Section identifier. Should be human-friendly as this will appear in URLs
+  // and other human-visible pieces of UI.
+  string label = 4;
+
+  // Human-readable title of this section.
+  string title = 5;
+
+  // Brief description of the section's contents.
+  string summary = 6;
+
+  // Time Limit used for this section within an exam.
+  int32 time_limit_seconds = 7;
+
+  // Slate document shown before the exam section is presented to the user.
+  // Used to synthesise an Exam Section.
+  google.protobuf.Struct instructions = 8;
+
+  // Whether the section is unpublished, published or coming soon.
+  Published published = 9;
+
+  // When true, the Exams panel will be hidden on the Explore page.
+  bool exams_hidden = 10;
+  // When true, the Exams panel will be hidden on the Explore page.
+  bool quizzes_hidden = 11;
+	// when true, the Revise panel will be hidden on the Explore page.
+  bool revise_hidden = 12;
+	// When true, the All Modules panel will be hidden on the Explore page.
+  bool modules_hidden = 13;
+
+  // The course this section belongs to, or zero.
+  int64 course_id = 14;
+  // The module this section belongs to, or zero.
+  int64 module_id = 15;
+  // The chapter this section belongs to, or zero.
+  int64 chapter_id = 16;
+  // The lesson this section belongs to, or zero.
+  int64 lesson_id = 17;
+
+  // True if this section is accessible for all users, paid or not.
+  bool free = 18;
 }
 
-// Foo bar baz.
-message Foo {
+// When a user marks a lesson for revision it creates one of these.
+message RevisionMarker {
+  // Lesson that is marked for revision.
+  int64 section_id = 1;
+
+  // Time the lesson was marked for revision.
+  google.protobuf.Timestamp marked = 2;
+}
+
+// A piece of data associated with a section.
+message Annotation {
+  int64 section_id = 1;
+  string type = 2;
+  google.protobuf.Timestamp created = 3;
+}
+
+message RenderMarkupRequest {
+  // Type of the markup to render.
+  enum Type {
+    UNKNOWN = 0;
+    MATHML = 1;
+    TEX = 2;
+  }
+
+  Type type = 1;
+  string markup = 2;
+}
+
+message RenderMarkupResponse {
+  // A string of HTML that can be rendered by a browser.
+  string markup = 1;
+  
+  // Any errors reported by the renderer. Empty string here means no errors.
+  string error = 2;
+}
+
+message LoginRequest {
+  string email = 1;
+  string password = 2;
+}
+
+message LoginResponse {
+  // We return nothing: success sets a cookie on the HTTP response that
+  // authorises other API method calls.
+}
+
+message LogoutRequest {}
+message LogoutResponse {}
+
+message RequestPasswordResetRequest {
+  string email = 1;
+}
+message RequestPasswordResetResponse {}
+
+message ResetPasswordRequest {
+  string token = 2;
+  string new_password = 3;
+}
+
+message ResetPasswordResponse {}
+
+message SaveSectionRequest {
+  // Field values.
+  Section section = 1;
+
+  // Specifies which fields are to be written.
+  google.protobuf.FieldMask mask = 2;
+}
+message SaveSectionResponse {
+  int64 id = 1;
+}
+
+message SaveContentRequest {
+  // Section id that this content belongs to.
+  int64 id = 1;
+  // Field values.
+  google.protobuf.Struct content = 2;
+}
+message SaveContentResponse {
+  int64 id = 1;
+}
+
+message GetContentRequest {
+  // The ID of the section to retrieve content for.
+  int64 section_id = 1;
+
+  // The version of the content to retrieve. If not specified returns the latest
+  // version.
+  int32 version = 2;
+}
+
+message GetContentResponse {
+  google.protobuf.Struct content = 1;
+
+  // The latest version of the content that is available. Starts at 1.
+  int32 latest_version = 2;
+
+  // Questions that are linked from this content, i.e. concept checks. May
+  // include dead links.
+  repeated Question questions = 3;
+
+  // Responses to embedded questions.
+  repeated ExamQuestionResponse responses = 4;
+}
+
+message GetContentVersionsRequest {
+  int64 section_id = 1;
+}
+
+message User {
+  int64 id = 1;
+  string email = 2;
+  string display_name = 3;
+  Role role = 4;
+  string label = 5;
+  string first_name = 6;
+  string last_name = 7;
+}
+
+message ContentVersion {
+  int32 version = 1;
+  User author = 2;
+}
+
+message GetContentVersionsResponse {
+  repeated ContentVersion versions = 1;
+}
+
+message CreateSectionRequest {
+  Section section = 1;
+}
+message CreateSectionResponse {
+  Section section = 1;
+}
+
+message ReorderSectionRequest {
+  int64 section_id = 1;
+
+  // The new position for this section.
+  int32 position = 2;
+}
+
+message ReorderSectionResponse {
+}
+
+message TestEndpointRequest {
+  // Cause this endpoint to return a 401.
+  bool fail_with_unauthenticated = 1;
+}
+message TestEndpointResponse {
+  string name_with_underscores = 1;
+  int64 authenticated_user_id = 2;
+  string authenticated_user_email = 3;
+}
+
+message DeleteSectionRequest {
+  int64 section_id = 1;
+}
+
+message DeleteSectionResponse {}
+
+message CreateUserRequest {
+  string email = 1;
+  string password = 2;
+  string first_name = 3;
+  string last_name = 4;
+  Role role = 5;
+  string label = 6;
+}
+
+message CreateUserResponse {
+  int64 user_id = 1;
+  // Token that can be used to reset the user's password.
+  string reset_password_token = 2;
+}
+
+enum Role {
+  UNKNOWN = 0; // TODO(james): Rename to unknown role.
+  STUDENT = 1;
+  AUTHOR = 2;
+  ADMIN = 3;
+}
+
+message SearchRequest {
+  string query = 1;
+}
+
+message SearchResult {
+  int64 section_id = 1;
+  string text_fragment = 2;
+
+  // Position in the content that this search result is for.
+  repeated int32 position = 3;
+}
+
+message SearchResponse {
+  repeated SearchResult results = 1;
+}
+
+message ResetUserPasswordRequest {
+  // Email of the user to reset the password of.
+  string email = 1;
+  // If omitted, generates a random password.
+  string password = 2;
+}
+
+message ResetUserPasswordResponse {}
+
+message UpdateUserRequest {
+  string email = 1;
+  string first_name = 3;
+  string last_name = 4;
+  Role role = 5;
+  // Only populated by admin endpoints.
+  string label = 6;
+}
+
+message UpdateUserResponse {}
+
+message GetSectionsRequest {}
+
+message GetSectionsResponse {
+  repeated Section sections = 1;
+}
+
+message CourseAccess {
+  int64 course_id = 1;
+}
+
+message GetLoggedInUserRequest {}
+
+message GetLoggedInUserResponse {
+  User user = 1;
+  // What courses the user has access to.
+  repeated CourseAccess course_access = 2;
+}
+
+message MarkForRevisionRequest {
+  // ID of the lesson to mark for revision.
+  int64 section_id = 1;
+
+  // True if marking for revision, false if unmarking for revision.
+  bool needs_revision = 2;
+}
+
+message MarkForRevisionResponse {}
+
+message CompleteLessonRequest {
+  // ID of the lesson to mark as completed.
+  int64 section_id = 1;
+}
+
+message CompleteLessonResponse {}
+
+message GetAnnotationsRequest {}
+message GetAnnotationsResponse {
+  repeated Annotation annotations = 1;
+}
+
+message SearchUserRequest {
+  string query = 1;
+  // Specific email query.
+  string email = 2;
+}
+
+message SearchUserResponse {
+  repeated User users = 1;
+}
+
+message Exam {
   int64 id = 1;
   string name = 2;
+  int64 course_id = 3;
+  int32 position = 4; 
+
+  int32 question_count = 5;
+  int32 section_count = 6;
+  int32 time_limit_seconds = 7;
+
+  // Whether the section is unpublished, published or coming soon.
+  Published published = 8;
 }
 
-message GetFooRequest {
-  Foo foo = 1;
-}
-message GetFooResponse {}
+message ExamSection {
+  int64 id = 1;
+  int64 exam_id = 2;
+  string title = 3;
+  string short_description = 4;
 
-service TheService {
-  rpc GetFoo (GetFooRequest) returns (GetFooResponse);
+  // Slate document shown before the exam section is presented to the user.
+  google.protobuf.Struct instructions = 5;
+
+  // Time limit for this section in seconds.
+  int32 time_limit_seconds = 6;
+
+  // Position of this section in its exam
+  int32 position = 7;
+}
+
+// Next field: 24.
+message Question {
+  int64 id = 1;
+  int64 course_id = 2;
+  int64 module_id = 3;
+  int64 chapter_id = 4;
+  int64 lesson_id = 5;
+  int64 exam_id = 6;
+  int64 exam_section_id = 7;
+
+  // This field is set if this question belongs to a piece of content in a
+  // section.
+  int64 section_id = 20;
+
+  string notes = 8;
+  string label = 9;
+  string title = 10;
+
+  // How long the question author expects a student to take to do this question.
+  int32 target_duration_seconds = 21;
+
+  int64 group_id = 22;
+  int32 group_size = 23;
+
+  // Information required to answer the question.
+  google.protobuf.Struct text = 11;
+
+  // Explanation as to why the answers are what they are. This is
+  // a single explanation for the whole question.
+  google.protobuf.Struct explanation = 12;
+
+  // Question instructions.
+  google.protobuf.Struct instructions = 13;
+
+  // Position of this question in its section.
+  int32 position = 14;
+
+  // Possible answers.
+  AnswerSet answerSet = 15;
+
+  enum Type {
+    UNKNOWN_TYPE = 0;
+    SINGLE_RESPONSE = 1;
+    MULTIPLE_RESPONSE_PARTIAL_CORRECTNESS = 2;
+    CATEGORIZE = 3;
+    // User enters a piece of text which is compared against the correct answer.
+    TEXT = 4;
+  }
+
+  Type type = 16;
+
+  enum Layout {
+    UNKNOWN_LAYOUT = 0;
+    VERTICAL = 1;
+    HORIZONTAL = 2;
+  }
+
+  Layout layout = 17;
+
+  // When this question was created.
+  google.protobuf.Timestamp createdAt = 18;
+
+  // When this question was last updated.
+  google.protobuf.Timestamp updatedAt = 19;
+}
+
+message Answer {
+  // The answer.
+  google.protobuf.Struct text = 1;
+
+  // The URL of an image answer.
+  string url = 2;
+
+  // True if this answer is correct.
+  bool correct = 3;
+
+  // Which category this answer belongs to for categorize questions. A 1-based
+  // index into the categories array, with zero representing "no category".
+  int32 category = 4;
+}
+
+// Represents an answer to a text question.
+message TextAnswer {
+  // The correct answer. A student gets the question right if they enter this
+  // exactly.
+  string correct_value = 1;
+
+  // Human-readable unit of measurement that is associated with the text answer.
+  // Can contain embedded KaTeX within escaped parenthesis, i.e.: \( \).
+  string unit = 2;
+}
+
+message AnswerSet {
+  repeated Answer answers = 1;
+  repeated AnswerCategory categories = 2;
+  TextAnswer text = 3;
+}
+
+message AnswerCategory {
+  string text = 1;
+}
+
+message GetExamsRequest {
+  int64 course_id = 1;
+}
+message GetExamsResponse {
+  repeated Exam exams = 1;
+  // TODO(james): Make this a separate endpoint.
+  repeated ExamAttempt attempts = 2;
+}
+
+message GetExamRequest {
+  int64 id = 1;
+  bool include_answers = 2;
+}
+
+message GetExamResponse {
+  Exam exam = 1;
+  repeated ExamSection sections = 2;
+  repeated Question questions = 3;
+}
+
+message SaveExamRequest {
+  Exam exam = 1;
+}
+message SaveExamResponse {
+  // Id of the saved exam.
+  int64 id = 1;
+}
+
+message SaveExamSectionRequest {
+  ExamSection section = 1;
+}
+message SaveExamSectionResponse {
+  int64 id = 1;
+}
+
+message SaveQuestionRequest {
+  // Fields to write.
+  // If id is specified, update the existing question, else create.
+  Question question = 1;
+
+  // Specifies which fields of question are to be written.
+  google.protobuf.FieldMask mask = 2;
+}
+message SaveQuestionResponse {
+  int64 id = 1;
+}
+
+message SaveQuestionBulkRequest {
+  // Specifies which fields of question are to be written.
+  google.protobuf.FieldMask mask = 1;
+
+  // Specifies which fields of question are to be written.
+  repeated int64 ids = 2;
+
+  // Fields to write.
+  Question question = 3;
+
+  // When specified, apply the write to all questions matching these filters.
+  repeated QueryFilterClause filters = 4;
+
+  // If specified, don't actually perform the write, just return how many
+  // entities would be written.
+  bool dry_run = 5;
+}
+message SaveQuestionBulkResponse {
+  // How many entities were written.
+  int32 entities_written_count = 1;
+}
+
+enum EntityType {
+  UNKNOWN_ENTITY_TYPE = 0;
+  EXAM = 1;
+  EXAM_SECTION = 2;
+  QUESTION = 3;
+  USER = 4;
+}
+
+message DeleteEntityRequest {
+  // Type of entity to delete.
+  EntityType type = 1;
+
+  // ID of the entity to delete.
+  int64 id = 2;
+}
+
+message DeleteEntityResponse {
+  // ID of the deleted entity.
+  int64 id = 1;
+}
+
+enum FilterRelation {
+  UNKNOWN_RELATION = 0;
+  EQUALS = 1;
+  LIKE = 2;
+  IS_NULL = 3;
+}
+
+message QueryFilterClause {
+  string field = 1;
+  string value = 2;
+  FilterRelation relation = 3;
+}
+
+enum Order {
+  UNKNOWN_ORDER = 0;
+  ASCENDING = 1;
+  DESCENDING = 2;
+}
+
+message QuerySortClause {
+  string field = 1;
+  Order order = 2;
+}
+
+message QueryPagination {
+  int32 limit = 1;
+  int32 offset = 2;
+}
+
+message QueryQuestionsRequest {
+  repeated QueryFilterClause filters = 1;
+  repeated QuerySortClause orders = 2;
+  QueryPagination pagination = 3;
+}
+
+message QueryQuestionsResponse {
+  repeated Question questions = 1;
+  // Total number of questions.
+  int32 total = 2;
+}
+
+message GenericQueryRequest {
+  repeated QueryFilterClause filters = 1;
+  repeated QuerySortClause orders = 2;
+  QueryPagination pagination = 3;
+
+  // Type of entity we want to return.
+  EntityType type = 4;
+}
+
+message GenericQueryResponse {
+  repeated google.protobuf.Struct entities = 1;
+  // Total number of entities.
+  int32 total = 2;
+}
+
+
+
+
+// Exam messages.
+enum AnswerMark {
+  UNKNOWN_MARK = 0;
+  CORRECT = 1;
+  PARTIALLY_CORRECT = 2;
+  INCORRECT = 3;
+}
+
+message AttemptExamRequest {
+  int64 exam_id = 1;
+}
+
+message AttemptExamResponse {
+  int64 attempt_id = 1;
+}
+
+message ConceptCheckResponse {
+  // ID of the user answering the concept check.
+  int64 user_id = 1;
+
+  // ID of the section that the concept check belongs to.
+  int64 section_id = 2;
+
+  // Label that identifies the concept check within the label.
+  string check_label = 3;
+
+  // Index of the answer.
+  int32 answer_index = 4;
+
+  // The answer to a numeric question.
+  double numeric_answer = 5;
+}
+
+message ExamQuestionResponse {
+  // The exam attempt that this response is a part of.
+  int64 attempt_id = 1;
+
+  // The question that this is a response for.
+  int64 question_id = 2;
+
+  // For single choice questions we just record their response. 0-based.
+  int32 answer_index = 3;
+
+  // Map from answer_index to the boolean value that the user has specified for
+  // that answer.
+  map<int32, bool> multi_response_value = 4;
+
+  // Map from answer index to which category the answer was put in. The category is a
+  // 1-based index into the list of available categories on the question where 0
+  // means "unattempted".
+  map<int32, int32> category_index = 5;
+
+  // The value of the answer for value-based questions.
+  string answer_text = 6;
+}
+
+message AnswerExamQuestionRequest {
+  ExamQuestionResponse response = 3;
+}
+message AnswerExamQuestionResponse {}
+
+message AnswerConceptCheckRequest {
+  // The question that is being answered.
+  int64 question_id = 1;
+
+  // The response the user is entering for this question.
+  ExamQuestionResponse response = 2;
+}
+message AnswerConceptCheckResponse {}
+
+message CompleteExamRequest {
+  int64 attempt_id = 1;
+}
+message CompleteExamResponse {}
+
+message ExamResultSummary {
+  int32 correct = 1;
+  int32 incorrect = 2;
+  int32 partially_correct = 3;
+  int32 total = 4;
+
+  // How many "marks" the user earned for this exam.
+  int32 marks_earned = 5;
+  // The maximum number of marks they could have earned for this exam.
+  int32 marks_possible = 6;
+}
+
+message ExamAttempt {
+  int64 id = 1;
+  int64 exam_id = 2;
+  bool complete = 3;
+  google.protobuf.Timestamp started = 4;
+  google.protobuf.Timestamp finished = 5;
+  // Only defined if the exam is complete.
+  ExamResultSummary result_summary = 6;
+}
+
+message GetExamAttemptsRequest {
+}
+message GetExamAttemptsResponse {
+  repeated ExamAttempt attempts = 1;
+}
+
+message GetExamAttemptRequest {
+  // Id of the exam attempt we are interested in.
+  int64 id = 1;
+}
+message GetExamAttemptResponse {
+  ExamAttempt attempt = 1;
+}
+
+message GetExamAttemptResponsesRequest {
+  // Attempt id.
+  int64 attempt_id = 1;
+}
+
+message GetExamAttemptResponsesResponse {
+  // A user's responses that were part of the given attempt.
+  repeated ExamQuestionResponse responses = 1;
+}
+
+message ReorderExamRequest {
+  int64 exam_id = 1;
+  int32 position = 2;
+}
+message ReorderExamResponse {}
+
+message ReorderExamQuestionRequest {
+  int64 question_id = 1;
+  int32 position = 2;
+}
+message ReorderExamQuestionResponse {}
+
+message ResetExamAttemptsRequest {}
+message ResetExamAttemptsResponse {}
+
+message GetExamCompletionMetricsRequest {
+  // The course to limit the scope of exam attempts to.
+  int64 course_id = 1;
+}
+
+message GetExamCompletionMetricsResponse {
+  message Row {
+    int64 exam_id = 1;
+    string name = 2;
+    int32 completed = 3;
+  }
+  
+  repeated Row rows = 1;
+}
+
+message GetCourseEnrolmentMetricsRequest {}
+
+message GetCourseEnrolmentMetricsResponse {
+  message Row {
+    int64 course_id = 1;
+    string title = 2;
+    int32 total_with_access = 3;
+  }
+  
+  repeated Row rows = 1;
+}
+
+message GetMarkAggregatesRequest {
+  int64 course_id = 1;
+  // Restrict results to a specific student.
+  int64 student_id = 2;
+
+  enum QuestionType {
+    UNKNOWN_QUESTION_TYPE = 0;
+    EXAM_QUESTION_TYPE = 1;
+    QUIZ_QUESTION_TYPE = 2;
+  }
+  QuestionType question_type = 3;
+
+  enum MarkDimension {
+    UNKNOWN_DIMENSION = 0;
+    EXAM = 1;
+    MODULE = 2;
+    QUESTION = 3;
+  }
+
+  repeated MarkDimension dimensions = 4;
+}
+
+message GetMarkAggregatesResponse {
+  message Row {
+    int64 course_id = 1;
+    int64 exam_id = 2;
+    int64 module_id = 3;
+    int64 question_id = 4;
+  
+    float average_mark_earned = 5;
+    int32 marks_possible = 6;
+  }
+
+  repeated Row rows = 1;
+}
+
+message RecordTimeSpentOnQuestionRequest {
+  // If specified the exam attempt that this question is a part of.
+  int64 attempt_id = 1;
+  // If specified the quiz that this question is a part of.
+  int64 quiz_id = 2;
+
+  // The question we are recording time spent on.
+  int64 question_id = 3;
+  // Time spent on question in millis.
+  int32 elapsed_ms = 4;
+}
+message RecordTimeSpentOnQuestionResponse {}
+
+message GetStudentExamPerformanceMetricsRequest {
+  int64 exam_id = 1;
+  QueryPagination pagination = 2;
+}
+
+message GetStudentExamPerformanceMetricsResponse {
+  message Row {
+    int64 exam_id = 1;
+    int64 exam_attempt_id = 2;
+    int64 student_id = 3;
+    string exam_name = 4;
+    string student_name = 5;
+    google.protobuf.Timestamp started = 6;
+    google.protobuf.Timestamp finished = 7;
+  }
+
+  repeated Row rows = 1;
+}
+
+message GeneratePasswordResetLinkRequest {
+  string email = 1;
+}
+
+message GeneratePasswordResetLinkResponse {
+  string link = 1;
+}
+
+message GetQuestionRequest {
+  int64 question_id = 1;
+}
+message GetQuestionResponse {
+  Question question = 1;
+}
+
+message CreateQuizRequest {
+  int64 module_id = 1;
+  repeated int64 chapter_id = 2;
+  int32 duration_seconds = 3;
+}
+message CreateQuizResponse {
+  int64 quiz_id = 1;
+}
+
+message AnswerQuizQuestionRequest {
+  // TODO(james): Consider removing this as strictly speaking we can determine
+  // it from the question id.
+  int64 quiz_id = 1;
+  int64 question_id = 2;
+  ExamQuestionResponse response = 3;
+}
+message AnswerQuizQuestionResponse {}
+
+message Quiz {
+  int64 id = 1;
+  // The topic of the quiz.
+  int64 module_id = 2;
+  
+  // When this quiz was created.
+  google.protobuf.Timestamp created_at = 3;
+}
+
+message GetQuizRequest {
+  int64 quiz_id = 1;
+}
+message GetQuizResponse {
+  Quiz quiz = 1;
+  repeated Question questions = 2;
+}
+
+message GetQuizResponsesRequest {
+  int64 quiz_id = 1;
+}
+message GetQuizResponsesResponse {
+  repeated ExamQuestionResponse responses = 1;
+}
+
+message GetQuestionPerformanceMetricsRequest {
+  int64 course_id = 1;
+}
+message GetQuestionPerformanceMetricsResponse {
+  message Row {
+    int64 module_id = 1;
+    float user_average_mark = 2;
+    float cohort_average_mark = 3;
+  }
+  repeated Row rows = 1;
+
+  message ChapterRow {
+    int64 module_id = 1;
+    int64 chapter_id = 2;
+    float user_average_mark = 3;
+    float cohort_average_mark = 4;
+  }
+  repeated ChapterRow chapter_rows = 2;
+}
+
+message QuizQuestionResults {
+  int64 question_id = 1;
+  int64 quiz_id = 2;
+  int32 marks_earned = 3;
+  int32 marks_possible = 4;
+}
+
+message QuizResults {
+  int64 quiz_id = 1;
+  int32 marks_earned = 2;
+  int32 marks_possible = 3;
+
+  // How long the quiz took the user to complete in milliseconds.
+  int32 time_to_complete_millis = 4;
+}
+
+message GetQuizResultsRequest {
+  int64 quiz_id = 1;
+}
+
+message GetQuizResultsResponse {
+  QuizResults quiz_results = 1;
+  repeated QuizQuestionResults question_results = 2;
+}
+
+message QuizSummary {
+  Quiz quiz = 1;
+  QuizResults results = 2;
+}
+
+message GetQuizResultSummariesRequest {
+  int64 module_id = 1;
+  QueryPagination pagination = 2;
+}
+message GetQuizResultSummariesResponse {
+  repeated QuizSummary summaries = 1;
+}
+
+service Learnable {
+  // Logs the user in.
+  rpc Login(LoginRequest) returns (LoginResponse) {}
+
+  // Logs the user out if they are logged in.
+  rpc Logout(LogoutRequest) returns (LogoutResponse) {}
+
+  // Attempts to send a password reset link to a specified email.
+  rpc RequestPasswordReset(RequestPasswordResetRequest) returns (RequestPasswordResetResponse) {}
+
+  // Attempts to reset the password for an user given a token.
+  rpc ResetPassword(ResetPasswordRequest) returns (ResetPasswordResponse) {}
+
+  // Returns a piece of content.
+  rpc GetContent(GetContentRequest) returns (GetContentResponse) {}
+
+  // Returns the old versions of a specific piece of content.
+  rpc GetContentVersions(GetContentVersionsRequest) returns (GetContentVersionsResponse) {}
+
+  // Renders a string of markup into JSX that can be rendered on the client.
+  // TODO(james): Delete.
+  rpc RenderMarkup(RenderMarkupRequest) returns (RenderMarkupResponse) {}
+
+  // Create a section.
+  rpc CreateSection(CreateSectionRequest) returns (CreateSectionResponse) {}
+
+  // Save a section.
+  rpc SaveSection(SaveSectionRequest) returns (SaveSectionResponse) {}
+
+  // Save a section's content.
+  rpc SaveContent(SaveContentRequest) returns (SaveContentResponse) {}
+
+  // Changes the position of the given section in its parent.
+  rpc ReorderSection(ReorderSectionRequest) returns (ReorderSectionResponse) {}
+
+  // Soft deletes an section.
+  rpc DeleteSection(DeleteSectionRequest) returns (DeleteSectionResponse) {}
+
+  // Returns sections with no content.
+  rpc GetSections(GetSectionsRequest) returns (GetSectionsResponse) {}
+
+  // Returns section annotations.
+  rpc GetAnnotations(GetAnnotationsRequest) returns (GetAnnotationsResponse) {}
+
+  // Search for sections.
+  rpc Search(SearchRequest) returns (SearchResponse) {}
+
+  // An endpoint that exists for the purposes of testing our RPC infrastructure.
+  rpc TestEndpoint(TestEndpointRequest) returns (TestEndpointResponse) {}
+
+  // Fetch the logged in user.
+  rpc GetLoggedInUser(GetLoggedInUserRequest) returns (GetLoggedInUserResponse) {}
+
+  // Mark a lesson for revision.
+  rpc MarkForRevision(MarkForRevisionRequest) returns (MarkForRevisionResponse) {}
+
+  // Complete a lesson.
+  rpc CompleteLesson(CompleteLessonRequest) returns (CompleteLessonResponse) {}
+  rpc AnswerConceptCheck(AnswerConceptCheckRequest) returns (AnswerConceptCheckResponse) {}
+
+  rpc SaveExam(SaveExamRequest) returns (SaveExamResponse) {}
+  rpc SaveExamSection(SaveExamSectionRequest) returns (SaveExamSectionResponse) {}
+  rpc SaveQuestion(SaveQuestionRequest) returns (SaveQuestionResponse) {}
+  rpc SaveQuestionBulk(SaveQuestionBulkRequest) returns (SaveQuestionBulkResponse) {}
+
+  rpc DeleteEntity(DeleteEntityRequest) returns (DeleteEntityResponse) {}
+
+  // Query questions.
+  rpc QueryQuestions(QueryQuestionsRequest) returns (QueryQuestionsResponse) {}
+
+  // Exam Analytics.
+  rpc GetMarkAggregates(GetMarkAggregatesRequest) returns (GetMarkAggregatesResponse) {}
+
+  // Generic data fetching API.
+  rpc GenericQuery(GenericQueryRequest) returns (GenericQueryResponse) {}
+
+  // Quiz API.
+  // Creates and starts a quiz.
+  rpc CreateQuiz(CreateQuizRequest) returns (CreateQuizResponse) {}
+  rpc AnswerQuizQuestion(AnswerQuizQuestionRequest) returns (AnswerQuizQuestionResponse) {}
+  rpc GetQuiz(GetQuizRequest) returns (GetQuizResponse) {}
+  rpc GetQuizResponses(GetQuizResponsesRequest) returns (GetQuizResponsesResponse) {}
+  rpc GetQuizResults(GetQuizResultsRequest) returns (GetQuizResultsResponse) {}
+  rpc GetQuizResultSummaries(GetQuizResultSummariesRequest) returns (GetQuizResultSummariesResponse) {}
+
+  // Performance metrics for questions broken down by quiz or exam.
+  rpc GetQuestionPerformanceMetrics(GetQuestionPerformanceMetricsRequest) returns (GetQuestionPerformanceMetricsResponse) {}
+
+  // (Obsolete). Old name for GetQuestionPerformanceMetrics. Delete one day.
+  rpc GetQuizPerformanceMetrics(GetQuestionPerformanceMetricsRequest) returns (GetQuestionPerformanceMetricsResponse) {}
+
+  // Exam API.
+  rpc AttemptExam(AttemptExamRequest) returns (AttemptExamResponse) {}
+  rpc AnswerExamQuestion(AnswerExamQuestionRequest) returns (AnswerExamQuestionResponse) {}
+  rpc RecordTimeSpentOnQuestion(RecordTimeSpentOnQuestionRequest) returns (RecordTimeSpentOnQuestionResponse) {}
+  rpc CompleteExam(CompleteExamRequest) returns (CompleteExamResponse) {}
+
+  // Get the list of available exams.
+  rpc GetExams(GetExamsRequest) returns (GetExamsResponse) {}
+
+  // Get a question by id.
+  rpc GetQuestion(GetQuestionRequest) returns (GetQuestionResponse) {}
+  
+  // Get an exam.
+  rpc GetExam(GetExamRequest) returns (GetExamResponse) {}
+
+  // Get an exam attempt's responses.
+  rpc GetExamAttemptResponses(GetExamAttemptResponsesRequest) returns (GetExamAttemptResponsesResponse);
+
+  // Get all exam attempts.
+  rpc GetExamAttempts(GetExamAttemptsRequest) returns (GetExamAttemptsResponse) {}
+  rpc GetExamAttempt(GetExamAttemptRequest) returns (GetExamAttemptResponse) {}
+  rpc ReorderExam(ReorderExamRequest) returns (ReorderExamResponse) {}
+  rpc ReorderExamQuestion(ReorderExamQuestionRequest) returns (ReorderExamQuestionResponse) {}
+
+  // Gets high level enrolment metrics for a course.
+  rpc GetCourseEnrolmentMetrics(GetCourseEnrolmentMetricsRequest) returns (GetCourseEnrolmentMetricsResponse) {}
+
+  // Gets metrics around exam completion.
+  rpc GetExamCompletionMetrics(GetExamCompletionMetricsRequest) returns (GetExamCompletionMetricsResponse) {}
+
+  // Get exam attempt data for a given exam.
+  rpc GetStudentExamPerformanceMetrics(GetStudentExamPerformanceMetricsRequest) returns (GetStudentExamPerformanceMetricsResponse) {}
+
+  // Resets all data relating to exam attempts. (Requires author permission.)
+  rpc ResetExamAttempts(ResetExamAttemptsRequest) returns (ResetExamAttemptsResponse) {}
+
+  // Admin methods.
+  // Reset the given user's password. (Admin only.)
+  rpc ResetUserPassword(ResetUserPasswordRequest) returns (ResetUserPasswordResponse) {}
+  rpc GeneratePasswordResetLink(GeneratePasswordResetLinkRequest) returns (GeneratePasswordResetLinkResponse) {}
+
+  // Change the details of a given user. (Admin only.)
+  rpc UpdateUser(UpdateUserRequest) returns (UpdateUserResponse) {}
+
+  // Search for existing users. (Admin only.)
+  rpc SearchUser(SearchUserRequest) returns (SearchUserResponse) {}
+
+  // Create user. (Admin only.)
+  rpc CreateUser(CreateUserRequest) returns (CreateUserResponse) {}
+}
+
+// Analytics.
+
+message ClientAction {
+  google.protobuf.Timestamp timestamp = 1;
+  string action = 2;
+  string payload = 3;
+}
+
+message RecordActionRequest {
+  repeated ClientAction actions = 1;
+}
+
+message RecordActionResponse {
+}
+
+// Service for capturing analytics data from the client.
+service Analytics {
+  // Record an action that occurred on the client.
+  rpc RecordAction(RecordActionRequest) returns (RecordActionResponse) {}
+}
+
+// ATAR.
+
+message CourseSelection {
+  // The ID assigned to this course by the Board of Studies.
+  int32 course_id = 1;
+
+  // The mark the user is aiming for / achieved.
+  float hsc_mark = 2;
+}
+
+message GenerateAirRequest {
+  // The ATAR that the user is aiming for.
+  float target_atar = 1;
+
+  // Email address of the client.
+  string email = 2;
+
+  // The courses that the user has picked.
+  repeated CourseSelection courses = 3;
+
+  // Name of the student the AIR is for.
+  string full_name = 4;
+
+  // ID of the school of the student.
+  int32 school_id = 5;
+
+  // Arbitrary string used to identify that a request is for debug purposes.
+  // This can be used to e.g. group requests from specific load test runs.
+  string debug_label = 6;
+
+  // If non-zero, wait this many millis instead of sending an email.
+  int32 fake_email_pause = 7;
+
+  // The year the student is in at school.
+  int32 grade = 8;
+}
+
+message GenerateAirResponse {
+
+}
+
+message SendQueuedAirRequest {}
+message SendQueuedAirResponse {}
+
+service AtarCalculator {
+  // Request that an AIR be sent to the given email address.
+  rpc GenerateAir(GenerateAirRequest) returns (GenerateAirResponse) {}
+
+  // Sends an AIR that is queued for sending (possibly because previous delivery
+  // failed).
+  rpc SendQueuedAir(SendQueuedAirRequest) returns (SendQueuedAirResponse) {}
+}
+
+// SSR.
+
+message RenderComponentRequest {
+  // Name of the component to render.
+  string name = 1;
+
+  // JSON to pass as props to the component.
+  string props = 4;
+}
+
+message RenderComponentResponse {
+  // Rendered HTML of the requested component.
+  string html = 1;
+}
+
+// Metadata for a course.
+message CourseMetadata {
+  // ID of the course that the metadata is for.
+  int32 course_id = 1;
+
+  // How many students achieved band6 for this course. Note this may be
+  // per-school or per-state depending on context.
+  int32 band6s = 2;
+}
+
+message RenderAirRequest {
+  GenerateAirRequest request = 1;
+  repeated CourseMetadata metadata = 2;
+  string school_name = 3;
+}
+
+message RenderAirResponse {
+  string html = 1;
+}
+
+service Ssr {
+  // Renders AIR to HTML.
+  rpc RenderAir(RenderAirRequest) returns (RenderAirResponse) {}
 }

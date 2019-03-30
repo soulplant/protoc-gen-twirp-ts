@@ -1,0 +1,54 @@
+syntax = "proto3";
+
+package api;
+
+// This is a comment
+// for TestMessage.
+message TestMessage {
+  // Some number.
+  int32 one = 1;
+
+  // I contain a nested inner.
+  message NestedOuter {
+    // I'm a deeply nested message.
+    message NestedInner {
+      // I'm a deeply nested field.
+      int32 innermost = 1;
+    }
+    // I contain things.
+    NestedInner container = 1;
+  }
+
+  // Sibling to NestedOuter.
+  message NestedSibling {
+
+  }
+
+  // NestedOuter.
+  NestedOuter outer = 2;
+}
+
+// Top level NestedOuter, never instantiated.
+message NestedOuter {
+  // A is third.
+  int32 a = 3;
+  // B is second.
+  int32 b = 2;
+  // C is first.
+  int32 c = 1;
+}
+
+// Foo bar baz.
+message Foo {
+  int64 id = 1;
+  string name = 2;
+}
+
+message GetFooRequest {
+  Foo foo = 1;
+}
+message GetFooResponse {}
+
+service TheService {
+  rpc GetFoo (GetFooRequest) returns (GetFooResponse);
+}
