@@ -131,44 +131,74 @@ func (pw *pathWalker) Next() int32 {
 type DescriptorField int32
 
 const (
-	Field_File_MessageType = 4
-	Field_File_Service     = 6
+	File_MessageType   = 4
+	Field_File_Service = 6
 
-	Field_Message_Field      = 2
-	Field_Message_NestedType = 3
+	Message_Field      = 2
+	Message_NestedType = 3
 )
 
 func packagePrefix(pack string) string {
 	return strings.ToUpper(pack[0:1]) + pack[1:]
 }
 
+type cursor struct {
+	// Name of the package we are in.
+	pkg string
+
+	// Names of the types that we are in.
+	typeNames []string
+}
+
+func (c *cursor) Push(m *d.DescriptorProto) {
+	c.typeNames = append(c.typeNames, m.GetName())
+}
+
+func (c *cursor) Pop() {
+	c.typeNames = c.typeNames[0 : len(c.typeNames)-1]
+}
+
+func (c *cursor) Current() string {
+	return packagePrefix(c.pkg) + strings.Join(c.typeNames, "_")
+}
+
+func (c *cursor) CurrentMethod(method string) string {
+	return c.Current() + "." + method
+}
+
 func locateInFile(fd *d.FileDescriptorProto, loc *d.SourceCodeInfo_Location) string {
 	pw := NewPathWalker(loc)
-	// p := loc.GetPath()
-	// o.Printf("// path = %v\n", p)
 	if pw.Done() {
 		return ""
 	}
-	if pw.Try(Field_File_MessageType) {
+	c := &cursor{
+		pkg: fd.GetPackage(),
+	}
+	if pw.Try(File_MessageType) {
 		m := fd.MessageType[pw.Next()]
-		name := packagePrefix(fd.GetPackage()) + m.GetName()
+		c.Push(m)
 		if pw.Done() {
-			return packagePrefix(fd.GetPackage()) + m.GetName()
+			return c.Current()
 		}
-		if pw.Try(Field_Message_Field) {
-			num := pw.Next()
-			f := m.GetField()[num]
-			name += "." + f.GetName()
-			if pw.Done() {
-				return name
+		for {
+			if pw.Try(Message_Field) {
+				num := pw.Next()
+				f := m.GetField()[num]
+				if pw.Done() {
+					return c.CurrentMethod(f.GetName())
+				}
+				return ""
 			}
-			return ""
+			if pw.Try(Message_NestedType) {
+				m = m.GetNestedType()[pw.Next()]
+				c.Push(m)
+				if pw.Done() {
+					return c.Current()
+				}
+				continue
+			}
+			break
 		}
-		if pw.Try(Field_Message_NestedType) {
-			// TODO(james): Implement.
-			return ""
-		}
-		return ""
 	}
 	return ""
 }
@@ -197,7 +227,13 @@ func (g *Gen) Generate(fd *d.FileDescriptorProto) *plugin.CodeGeneratorResponse 
 	for _, loc := range fd.GetSourceCodeInfo().GetLocation() {
 		name := locateInFile(fd, loc)
 		if name == "" {
+			o.Printf("// No info for %v\n", loc)
 			continue
+		}
+		o.Printf("// Adding info for %s\n", name)
+		o.Printf("//    %v\n", loc)
+		if oldLoc, ok := g.lm[name]; ok {
+			log.Fatalf("clobbering %s loc %v with %v", name, oldLoc, loc)
 		}
 		g.lm[name] = loc
 	}
