@@ -18,6 +18,8 @@ import (
 // TODO
 // - [ ] Implement service
 // - [ ] Implement enums
+//   - [x] Enum values
+//   - [ ] Enum value comments
 // - [ ] Emit camelCase names
 
 type file struct {
@@ -39,18 +41,30 @@ func makeFile(name, content string) *plugin.CodeGeneratorResponse_File {
 	}
 }
 
-func walkType(f func(parentTypes []*d.DescriptorProto, m *d.DescriptorProto), parentTypes []*d.DescriptorProto, m *d.DescriptorProto) {
-	f(parentTypes, m)
+// MessageVisitor visits a message at a specific path.
+type MessageVisitor func([]*d.DescriptorProto, *d.DescriptorProto)
+
+// EnumVisitor visits an enum at a specific path.
+type EnumVisitor func([]*d.DescriptorProto, *d.EnumDescriptorProto)
+
+func walkType(mv MessageVisitor, ev EnumVisitor, parentTypes []*d.DescriptorProto, m *d.DescriptorProto) {
+	mv(parentTypes, m)
 	stack := append(parentTypes[:0:0], parentTypes...)
 	stack = append(stack, m)
 	for _, nt := range m.GetNestedType() {
-		walkType(f, stack, nt)
+		walkType(mv, ev, stack, nt)
+	}
+	for _, et := range m.GetEnumType() {
+		ev(stack, et)
 	}
 }
 
 // Gen stores state used during code generation.
 type Gen struct {
+	// Message map.
 	m map[string]*d.DescriptorProto
+	// Enum map.
+	em map[string]*d.EnumDescriptorProto
 
 	// Package names keyed by type.
 	pm map[string]string
@@ -64,28 +78,41 @@ type Gen struct {
 func NewGen() *Gen {
 	return &Gen{
 		m:  map[string]*d.DescriptorProto{},
+		em: map[string]*d.EnumDescriptorProto{},
 		pm: map[string]string{},
 		lm: map[string]*d.SourceCodeInfo_Location{},
 	}
 }
 
-func getTypeName(parentTypes []*d.DescriptorProto, t *d.DescriptorProto) string {
+func getTypeName(parentTypes []*d.DescriptorProto, name string) string {
 	var parent []string
 	for _, p := range parentTypes {
 		parent = append(parent, p.GetName())
 	}
-	parent = append(parent, t.GetName())
+	parent = append(parent, name)
 	return strings.Join(parent, "_")
 }
 
 // RegisterType adds the given type to the global registry.
-func (g *Gen) RegisterType(parentTypes []*d.DescriptorProto, t *d.DescriptorProto, packageName string) {
-	name := packagePrefix(packageName) + getTypeName(parentTypes, t)
+func (g *Gen) RegisterType(parentTypes []*d.DescriptorProto, t *d.DescriptorProto, e *d.EnumDescriptorProto, packageName string) {
+	shortName := t.GetName()
+	if shortName == "" {
+		shortName = e.GetName()
+		if shortName == "" {
+			log.Fatalf("Either message or enum must be defined")
+		}
+	}
+	name := packagePrefix(packageName) + getTypeName(parentTypes, shortName)
 	_, ok := g.m[name]
 	if ok {
 		log.Fatalf("RegisterType: duplicate type detected: %s", name)
 	}
-	g.m[name] = t
+	if t != nil {
+		g.m[name] = t
+	}
+	if e != nil {
+		g.em[name] = e
+	}
 	g.pm[name] = packageName
 	g.names = append(g.names, name)
 }
@@ -290,38 +317,55 @@ func (g *Gen) Generate(fd *d.FileDescriptorProto) *plugin.CodeGeneratorResponse 
 		}
 		g.lm[name] = loc
 	}
+	mv := func(path []*d.DescriptorProto, t *d.DescriptorProto) {
+		var parent []string
+		for _, p := range path {
+			parent = append(parent, p.GetName())
+		}
+		g.RegisterType(path, t, nil, fd.GetPackage())
+	}
+	ev := func(path []*d.DescriptorProto, e *d.EnumDescriptorProto) {
+		var parent []string
+		for _, p := range path {
+			parent = append(parent, p.GetName())
+		}
+		g.RegisterType(path, nil, e, fd.GetPackage())
+	}
 	for _, t := range fd.GetMessageType() {
-		walkType(func(path []*d.DescriptorProto, t *d.DescriptorProto) {
-			spacing := "  "
-			var parent []string
-			for _, p := range path {
-				spacing += "  "
-				parent = append(parent, p.GetName())
-			}
-			g.RegisterType(path, t, fd.GetPackage())
-		}, nil, t)
+		walkType(mv, ev, nil, t)
+	}
+	for _, et := range fd.GetEnumType() {
+		ev(nil, et)
 	}
 
 	// o.Printf("opts %s\n", req.GetParameter())
 
 	for _, name := range g.names {
-		t := g.m[name]
 		comment := ""
 		if loc, ok := g.lm[name]; ok {
 			comment = makeComment(loc.GetLeadingComments())
 		}
-		o.Printf(comment)
-		o.Printf("export type %s = {\n", name)
-		for _, f := range t.GetField() {
-			fname := name + "." + f.GetName()
-			comment := ""
-			if loc, ok := g.lm[fname]; ok {
-				comment = makeComment(loc.GetLeadingComments())
+		if t, ok := g.m[name]; ok {
+			o.Printf(comment)
+			o.Printf("export type %s = {\n", name)
+			for _, f := range t.GetField() {
+				fname := name + "." + f.GetName()
+				comment := ""
+				if loc, ok := g.lm[fname]; ok {
+					comment = makeComment(loc.GetLeadingComments())
+				}
+				o.Printf(indentLines(1, fmt.Sprintf("%s%s?: %s;", comment, f.GetName(), g.GetTypeName(f))))
+				o.Printf("\n")
 			}
-			o.Printf(indentLines(1, fmt.Sprintf("%s%s?: %s;", comment, f.GetName(), g.GetTypeName(f))))
-			o.Printf("\n")
+			o.Printf("};\n\n")
 		}
-		o.Printf("};\n\n")
+		if e, ok := g.em[name]; ok {
+			o.Printf("export enum %s {\n", name)
+			for _, v := range e.GetValue() {
+				o.Printf("  %s = \"%s\",\n", v.GetName(), v.GetName())
+			}
+			o.Printf("}\n")
+		}
 	}
 
 	for _, s := range fd.GetService() {
