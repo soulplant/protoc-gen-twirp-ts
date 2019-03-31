@@ -39,11 +39,11 @@ func makeFile(name, content string) *plugin.CodeGeneratorResponse_File {
 	}
 }
 
-func walkType(f func(parentTypes []*d.DescriptorProto, t *d.DescriptorProto), parentTypes []*d.DescriptorProto, t *d.DescriptorProto) {
-	f(parentTypes, t)
+func walkType(f func(parentTypes []*d.DescriptorProto, m *d.DescriptorProto), parentTypes []*d.DescriptorProto, m *d.DescriptorProto) {
+	f(parentTypes, m)
 	stack := append(parentTypes[:0:0], parentTypes...)
-	stack = append(stack, t)
-	for _, nt := range t.GetNestedType() {
+	stack = append(stack, m)
+	for _, nt := range m.GetNestedType() {
 		walkType(f, stack, nt)
 	}
 }
@@ -137,12 +137,16 @@ type DescriptorField int32
 
 const (
 	File_MessageType = 4
+	File_EnumType    = 5
 	File_Service     = 6
 
 	Message_Field      = 2
 	Message_NestedType = 3
+	Message_Enum       = 4
 
 	Service_Method = 2
+
+	Enum_Value = 2
 )
 
 func packagePrefix(pack string) string {
@@ -171,6 +175,19 @@ func (c *cursor) Current() string {
 
 func (c *cursor) CurrentMethod(method string) string {
 	return c.Current() + "." + method
+}
+
+func locateEnum(e *d.EnumDescriptorProto, pw *pathWalker, c *cursor) string {
+	if pw.Done() {
+		return c.Current()
+	}
+	if pw.Try(Enum_Value) {
+		v := e.GetValue()[pw.Next()]
+		if pw.Done() {
+			return c.CurrentMethod(v.GetName())
+		}
+	}
+	return ""
 }
 
 func locateInFile(fd *d.FileDescriptorProto, loc *d.SourceCodeInfo_Location) string {
@@ -204,7 +221,17 @@ func locateInFile(fd *d.FileDescriptorProto, loc *d.SourceCodeInfo_Location) str
 				}
 				continue
 			}
+			if pw.Try(Message_Enum) {
+				e := m.GetEnumType()[pw.Next()]
+				c.Push(e.GetName())
+				return locateEnum(e, pw, c)
+			}
 			break
+		}
+		if pw.Try(File_EnumType) {
+			e := m.GetEnumType()[pw.Next()]
+			c.Push(e.GetName())
+			return locateEnum(e, pw, c)
 		}
 	}
 	if pw.Try(File_Service) {
@@ -359,7 +386,8 @@ func (g *Gen) GetTypeName(f *d.FieldDescriptorProto) string {
 		}
 		return qualifiedToCanonical(f.GetTypeName())
 	case d.FieldDescriptorProto_TYPE_ENUM:
-		return "number /* fix me */"
+		return qualifiedToCanonical(f.GetTypeName())
+		// return "number /* fix me */"
 	default:
 		panic(fmt.Sprintf("GetTypeName: unknown type %s", f.GetType()))
 	}
