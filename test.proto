@@ -3,6 +3,7 @@ syntax = "proto3";
 import "google/protobuf/struct.proto";
 import "google/protobuf/timestamp.proto";
 import "google/protobuf/field_mask.proto";
+import "google/protobuf/wrappers.proto";
 
 package api;
 // option go_package = "gitlab.com/learnable/learnable/server/api";
@@ -23,7 +24,7 @@ message Section {
 
   // The id of the lesson that this section is a part of.
   int64 parent = 2;
-  int64 parent_id = 19;
+  google.protobuf.Int64Value parent_id = 19;
 
   // The position this section has with its parent lesson.
   int32 position = 3;

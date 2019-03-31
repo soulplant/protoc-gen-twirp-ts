@@ -18,7 +18,6 @@ import (
 // TODO
 // - [ ] Implement service
 // - [ ] Emit camelCase names
-// - [ ] Nullable wrapper types
 
 type file struct {
 	buf *bytes.Buffer
@@ -464,6 +463,24 @@ func wellKnownToTS(typeName string) string {
 		return "{}"
 	case ".google.protobuf.FieldMask":
 		return "string[]"
+	case ".google.protobuf.DoubleValue":
+		fallthrough
+	case ".google.protobuf.Int32Value":
+		fallthrough
+	case ".google.protobuf.UInt32Value":
+		fallthrough
+	case ".google.protobuf.FloatValue":
+		return "number | null"
+	case ".google.protobuf.Int64Value":
+		fallthrough
+	case ".google.protobuf.UInt64Value":
+		return "string | null"
+	case ".google.protobuf.BoolValue":
+		return "boolean | null"
+	case ".google.protobuf.StringValue":
+		fallthrough
+	case ".google.protobuf.BytesValue":
+		return "string | null"
 	default:
 		return ""
 	}
