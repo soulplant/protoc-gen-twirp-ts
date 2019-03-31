@@ -16,9 +16,9 @@ import (
 )
 
 // TODO
-// - [ ] Make comments on service methods work
 // - [ ] Implement service
 // - [ ] Implement enums
+// - [ ] Emit camelCase names
 
 type file struct {
 	buf *bytes.Buffer
@@ -136,11 +136,13 @@ func (pw *pathWalker) Next() int32 {
 type DescriptorField int32
 
 const (
-	File_MessageType   = 4
-	Field_File_Service = 6
+	File_MessageType = 4
+	File_Service     = 6
 
 	Message_Field      = 2
 	Message_NestedType = 3
+
+	Service_Method = 2
 )
 
 func packagePrefix(pack string) string {
@@ -155,8 +157,8 @@ type cursor struct {
 	typeNames []string
 }
 
-func (c *cursor) Push(m *d.DescriptorProto) {
-	c.typeNames = append(c.typeNames, m.GetName())
+func (c *cursor) Push(name string) {
+	c.typeNames = append(c.typeNames, name)
 }
 
 func (c *cursor) Pop() {
@@ -181,7 +183,7 @@ func locateInFile(fd *d.FileDescriptorProto, loc *d.SourceCodeInfo_Location) str
 	}
 	if pw.Try(File_MessageType) {
 		m := fd.MessageType[pw.Next()]
-		c.Push(m)
+		c.Push(m.GetName())
 		if pw.Done() {
 			return c.Current()
 		}
@@ -196,13 +198,27 @@ func locateInFile(fd *d.FileDescriptorProto, loc *d.SourceCodeInfo_Location) str
 			}
 			if pw.Try(Message_NestedType) {
 				m = m.GetNestedType()[pw.Next()]
-				c.Push(m)
+				c.Push(m.GetName())
 				if pw.Done() {
 					return c.Current()
 				}
 				continue
 			}
 			break
+		}
+	}
+	if pw.Try(File_Service) {
+		s := fd.Service[pw.Next()]
+		c.Push(s.GetName())
+		if pw.Done() {
+			return c.Current()
+		}
+		if pw.Try(Service_Method) {
+			m := s.GetMethod()[pw.Next()]
+			if pw.Done() {
+				return c.CurrentMethod(m.GetName())
+			}
+			return ""
 		}
 	}
 	return ""
@@ -284,9 +300,16 @@ func (g *Gen) Generate(fd *d.FileDescriptorProto) *plugin.CodeGeneratorResponse 
 	for _, s := range fd.GetService() {
 		o.Printf("export interface %s {\n", s.GetName())
 		for _, m := range s.GetMethod() {
-			o.Printf("  %s(req: %s): Promise<%s>;\n", m.GetName(), qualifiedToCanonical(m.GetInputType()), qualifiedToCanonical(m.GetOutputType()))
+			mName := packagePrefix(fd.GetPackage()) + s.GetName() + "." + m.GetName()
+			loc, _ := g.lm[mName]
+			comment := ""
+			if loc.GetLeadingComments() != "" {
+				comment = makeComment(loc.GetLeadingComments())
+			}
+			def := fmt.Sprintf("%s(req: %s): Promise<%s>;\n\n", m.GetName(), qualifiedToCanonical(m.GetInputType()), qualifiedToCanonical(m.GetOutputType()))
+			o.Printf(indentLines(1, strings.TrimRight(comment+def, "\n")) + "\n\n")
 		}
-		o.Printf("}\n")
+		o.Printf("}\n\n")
 	}
 	o.Printf("\n")
 
