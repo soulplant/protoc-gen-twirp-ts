@@ -248,6 +248,7 @@ message CreateUserResponse {
 
 enum Role {
   UNKNOWN = 0; // TODO(james): Rename to unknown role.
+  // Student role.
   STUDENT = 1;
   AUTHOR = 2;
   ADMIN = 3;

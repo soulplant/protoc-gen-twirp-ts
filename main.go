@@ -17,9 +17,6 @@ import (
 
 // TODO
 // - [ ] Implement service
-// - [ ] Implement enums
-//   - [x] Enum values
-//   - [ ] Enum value comments
 // - [ ] Emit camelCase names
 
 type file struct {
@@ -100,17 +97,23 @@ func (g *Gen) RegisterType(parentTypes []*d.DescriptorProto, t *d.DescriptorProt
 		shortName = e.GetName()
 		if shortName == "" {
 			log.Fatalf("Either message or enum must be defined")
+		} else {
+			// log.Fatalf("short enum name: %s", shortName)
 		}
 	}
 	name := packagePrefix(packageName) + getTypeName(parentTypes, shortName)
-	_, ok := g.m[name]
-	if ok {
-		log.Fatalf("RegisterType: duplicate type detected: %s", name)
-	}
 	if t != nil {
+		_, ok := g.m[name]
+		if ok {
+			log.Fatalf("RegisterType: duplicate type detected: %s", name)
+		}
 		g.m[name] = t
 	}
 	if e != nil {
+		_, ok := g.em[name]
+		if ok {
+			log.Fatalf("RegisterType: duplicate type detected: %s", name)
+		}
 		g.em[name] = e
 	}
 	g.pm[name] = packageName
@@ -255,11 +258,6 @@ func locateInFile(fd *d.FileDescriptorProto, loc *d.SourceCodeInfo_Location) str
 			}
 			break
 		}
-		if pw.Try(File_EnumType) {
-			e := m.GetEnumType()[pw.Next()]
-			c.Push(e.GetName())
-			return locateEnum(e, pw, c)
-		}
 	}
 	if pw.Try(File_Service) {
 		s := fd.Service[pw.Next()]
@@ -274,6 +272,11 @@ func locateInFile(fd *d.FileDescriptorProto, loc *d.SourceCodeInfo_Location) str
 			}
 			return ""
 		}
+	}
+	if pw.Try(File_EnumType) {
+		e := fd.GetEnumType()[pw.Next()]
+		c.Push(e.GetName())
+		return locateEnum(e, pw, c)
 	}
 	return ""
 }
@@ -351,10 +354,12 @@ func (g *Gen) Generate(fd *d.FileDescriptorProto) *plugin.CodeGeneratorResponse 
 			for _, f := range t.GetField() {
 				fname := name + "." + f.GetName()
 				comment := ""
+				comTrail := ""
 				if loc, ok := g.lm[fname]; ok {
 					comment = makeComment(loc.GetLeadingComments())
+					comTrail = "  " + strings.TrimRight(makeComment(loc.GetTrailingComments()), "\n")
 				}
-				o.Printf(indentLines(1, fmt.Sprintf("%s%s?: %s;", comment, f.GetName(), g.GetTypeName(f))))
+				o.Printf(indentLines(1, fmt.Sprintf("%s%s?: %s;%s", comment, f.GetName(), g.GetTypeName(f), comTrail)))
 				o.Printf("\n")
 			}
 			o.Printf("};\n\n")
@@ -362,7 +367,15 @@ func (g *Gen) Generate(fd *d.FileDescriptorProto) *plugin.CodeGeneratorResponse 
 		if e, ok := g.em[name]; ok {
 			o.Printf("export enum %s {\n", name)
 			for _, v := range e.GetValue() {
-				o.Printf("  %s = \"%s\",\n", v.GetName(), v.GetName())
+				vcomTrail := ""
+				if loc, ok := g.lm[name+"."+v.GetName()]; ok {
+					vcom := strings.TrimRight(makeComment(loc.GetLeadingComments()), "\n")
+					if vcom != "" {
+						o.Printf("  " + vcom + "\n")
+					}
+					vcomTrail = "  " + strings.TrimRight(makeComment(loc.GetTrailingComments()), "\n")
+				}
+				o.Printf("  %s = \"%s\",%s\n", v.GetName(), v.GetName(), vcomTrail)
 			}
 			o.Printf("}\n")
 		}
