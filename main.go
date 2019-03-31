@@ -394,6 +394,13 @@ func (g *Gen) Generate(fd *d.FileDescriptorProto) *plugin.CodeGeneratorResponse 
 
 // GetTypeName of the given field.
 func (g *Gen) GetTypeName(f *d.FieldDescriptorProto) string {
+	if f.GetLabel() == d.FieldDescriptorProto_LABEL_REPEATED {
+		return g.getRawTypeName(f) + "[]"
+	}
+	return g.getRawTypeName(f)
+}
+
+func (g *Gen) getRawTypeName(f *d.FieldDescriptorProto) string {
 	switch f.GetType() {
 	case d.FieldDescriptorProto_TYPE_INT32:
 		fallthrough
