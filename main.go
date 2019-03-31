@@ -355,7 +355,10 @@ func (g *Gen) Generate(fd *d.FileDescriptorProto) *plugin.CodeGeneratorResponse 
 				comTrail := ""
 				if loc, ok := g.lm[fname]; ok {
 					comment = makeComment(loc.GetLeadingComments())
-					comTrail = "  " + strings.TrimRight(makeComment(loc.GetTrailingComments()), "\n")
+					comTrail = strings.TrimRight(makeComment(loc.GetTrailingComments()), "\n")
+					if comTrail != "" {
+						comTrail = "  " + comTrail
+					}
 				}
 				o.Printf(indentLines(1, fmt.Sprintf("%s%s?: %s;%s", comment, f.GetJsonName(), g.GetTypeName(f), comTrail)))
 				o.Printf("\n")
