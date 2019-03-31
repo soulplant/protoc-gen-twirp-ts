@@ -18,6 +18,7 @@ import (
 // TODO
 // - [ ] Implement service
 // - [ ] Emit camelCase names
+// - [ ] Nullable wrapper types
 
 type file struct {
 	buf *bytes.Buffer
@@ -450,7 +451,6 @@ func (g *Gen) getRawTypeName(f *d.FieldDescriptorProto) string {
 		return qualifiedToCanonical(f.GetTypeName())
 	case d.FieldDescriptorProto_TYPE_ENUM:
 		return qualifiedToCanonical(f.GetTypeName())
-		// return "number /* fix me */"
 	default:
 		panic(fmt.Sprintf("GetTypeName: unknown type %s", f.GetType()))
 	}
