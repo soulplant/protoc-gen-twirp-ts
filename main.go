@@ -120,63 +120,62 @@ func (g *Gen) RegisterType(parentTypes []*d.DescriptorProto, t *d.DescriptorProt
 	g.names = append(g.names, name)
 }
 
-// type LocationTree struct {
-// 	nodes []*LocationNode
-// }
-
-// func getTypeNameByPath(path []int32, fd *d.FileDescriptorProto) string {
-// 	fd.
-// }
-
-// pathWalker handles traversing a location within a file.
-type pathWalker struct {
+// PathWalker handles traversing a location within a file.
+type PathWalker struct {
 	// Location we are traversing within fd.
 	loc *d.SourceCodeInfo_Location
 	// Where we are up to in the Location.
 	idx int
 }
 
-func NewPathWalker(loc *d.SourceCodeInfo_Location) *pathWalker {
-	return &pathWalker{
+// NewPathWalker creates a new PathWalker.
+func NewPathWalker(loc *d.SourceCodeInfo_Location) *PathWalker {
+	return &PathWalker{
 		loc: loc,
 	}
 }
 
-func (pw *pathWalker) Done() bool {
+// Done is true when there are no more path segments.
+func (pw *PathWalker) Done() bool {
 	return pw.idx >= len(pw.loc.Path)
 }
 
-func (pw *pathWalker) Try(next int32) bool {
+// Try advances the path and returns true if the next value matches.
+func (pw *PathWalker) Try(next DescriptorField) bool {
 	if pw.Done() {
-		panic(fmt.Sprintf("Try %d: pathWalker is done", next))
+		panic(fmt.Sprintf("Try %d: PathWalker is done", next))
 	}
-	if pw.loc.Path[pw.idx] == next {
+	if pw.loc.Path[pw.idx] == int32(next) {
 		pw.idx++
 		return true
 	}
 	return false
 }
 
-func (pw *pathWalker) Next() int32 {
+// Next advances the path and returns the next value in it.
+func (pw *PathWalker) Next() int32 {
 	result := pw.loc.Path[pw.idx]
 	pw.idx++
 	return result
 }
 
+// DescriptorField is the field number of a field in a descriptor proto. e.g.
+// fileMessageType is the number of the "message_type" field in a
+// FileDescriptorProto.
 type DescriptorField int32
 
 const (
-	File_MessageType = 4
-	File_EnumType    = 5
-	File_Service     = 6
+	fileMessageType DescriptorField = 4
+	fileEnumType    DescriptorField = 5
+	fileService     DescriptorField = 6
 
-	Message_Field      = 2
-	Message_NestedType = 3
-	Message_Enum       = 4
+	messageField      DescriptorField = 2
+	messageNestedType DescriptorField = 3
+	messageEnum       DescriptorField = 4
 
-	Service_Method = 2
+	serviceMethod DescriptorField = 2
 
-	Enum_Value = 2
+	enumValue DescriptorField = 2
 )
 
 func packagePrefix(pack string) string {
@@ -207,11 +206,11 @@ func (c *cursor) CurrentMethod(method string) string {
 	return c.Current() + "." + method
 }
 
-func locateEnum(e *d.EnumDescriptorProto, pw *pathWalker, c *cursor) string {
+func locateEnum(e *d.EnumDescriptorProto, pw *PathWalker, c *cursor) string {
 	if pw.Done() {
 		return c.Current()
 	}
-	if pw.Try(Enum_Value) {
+	if pw.Try(enumValue) {
 		v := e.GetValue()[pw.Next()]
 		if pw.Done() {
 			return c.CurrentMethod(v.GetName())
@@ -228,14 +227,14 @@ func locateInFile(fd *d.FileDescriptorProto, loc *d.SourceCodeInfo_Location) str
 	c := &cursor{
 		pkg: fd.GetPackage(),
 	}
-	if pw.Try(File_MessageType) {
+	if pw.Try(fileMessageType) {
 		m := fd.MessageType[pw.Next()]
 		c.Push(m.GetName())
 		if pw.Done() {
 			return c.Current()
 		}
 		for {
-			if pw.Try(Message_Field) {
+			if pw.Try(messageField) {
 				num := pw.Next()
 				f := m.GetField()[num]
 				if pw.Done() {
@@ -243,7 +242,7 @@ func locateInFile(fd *d.FileDescriptorProto, loc *d.SourceCodeInfo_Location) str
 				}
 				return ""
 			}
-			if pw.Try(Message_NestedType) {
+			if pw.Try(messageNestedType) {
 				m = m.GetNestedType()[pw.Next()]
 				c.Push(m.GetName())
 				if pw.Done() {
@@ -251,7 +250,7 @@ func locateInFile(fd *d.FileDescriptorProto, loc *d.SourceCodeInfo_Location) str
 				}
 				continue
 			}
-			if pw.Try(Message_Enum) {
+			if pw.Try(messageEnum) {
 				e := m.GetEnumType()[pw.Next()]
 				c.Push(e.GetName())
 				return locateEnum(e, pw, c)
@@ -259,13 +258,13 @@ func locateInFile(fd *d.FileDescriptorProto, loc *d.SourceCodeInfo_Location) str
 			break
 		}
 	}
-	if pw.Try(File_Service) {
+	if pw.Try(fileService) {
 		s := fd.Service[pw.Next()]
 		c.Push(s.GetName())
 		if pw.Done() {
 			return c.Current()
 		}
-		if pw.Try(Service_Method) {
+		if pw.Try(serviceMethod) {
 			m := s.GetMethod()[pw.Next()]
 			if pw.Done() {
 				return c.CurrentMethod(m.GetName())
@@ -273,7 +272,7 @@ func locateInFile(fd *d.FileDescriptorProto, loc *d.SourceCodeInfo_Location) str
 			return ""
 		}
 	}
-	if pw.Try(File_EnumType) {
+	if pw.Try(fileEnumType) {
 		e := fd.GetEnumType()[pw.Next()]
 		c.Push(e.GetName())
 		return locateEnum(e, pw, c)
