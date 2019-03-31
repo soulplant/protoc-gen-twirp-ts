@@ -349,6 +349,9 @@ func (g *Gen) Generate(fd *d.FileDescriptorProto) *plugin.CodeGeneratorResponse 
 			comment = makeComment(loc.GetLeadingComments())
 		}
 		if t, ok := g.m[name]; ok {
+			if t.GetOptions().GetMapEntry() {
+				continue
+			}
 			o.Printf(comment)
 			o.Printf("export interface %s {\n", name)
 			for _, f := range t.GetField() {
