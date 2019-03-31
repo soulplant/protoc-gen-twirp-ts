@@ -16,7 +16,8 @@ import (
 )
 
 // TODO
-// - [ ] Implement service
+// - [ ] Factor service implementation better.
+// - [ ] Parse dates, populate empty lists.
 
 type file struct {
 	buf *bytes.Buffer
@@ -305,6 +306,7 @@ func qualifiedToCanonical(typeName string) string {
 // Generate a response.
 func (g *Gen) Generate(fd *d.FileDescriptorProto) *plugin.CodeGeneratorResponse {
 	o := &file{buf: bytes.NewBufferString("")}
+	o.Printf("// tslint:disable\n\n")
 	for _, loc := range fd.GetSourceCodeInfo().GetLocation() {
 		name := locateInFile(fd, loc)
 		if name == "" {
@@ -348,7 +350,7 @@ func (g *Gen) Generate(fd *d.FileDescriptorProto) *plugin.CodeGeneratorResponse 
 		}
 		if t, ok := g.m[name]; ok {
 			o.Printf(comment)
-			o.Printf("export type %s = {\n", name)
+			o.Printf("export interface %s {\n", name)
 			for _, f := range t.GetField() {
 				fname := name + "." + f.GetName()
 				comment := ""
@@ -383,7 +385,8 @@ func (g *Gen) Generate(fd *d.FileDescriptorProto) *plugin.CodeGeneratorResponse 
 	}
 
 	for _, s := range fd.GetService() {
-		o.Printf("export interface %s {\n", s.GetName())
+		o.Printf("export class %s%s {\n", s.GetName(), packagePrefix(fd.GetPackage()))
+		o.Printf("  constructor(private baseUrl: string, private f: typeof fetch) {}\n")
 		for _, m := range s.GetMethod() {
 			mName := packagePrefix(fd.GetPackage()) + s.GetName() + "." + m.GetName()
 			loc, _ := g.lm[mName]
@@ -391,7 +394,18 @@ func (g *Gen) Generate(fd *d.FileDescriptorProto) *plugin.CodeGeneratorResponse 
 			if loc.GetLeadingComments() != "" {
 				comment = makeComment(loc.GetLeadingComments())
 			}
-			def := fmt.Sprintf("%s(req: %s): Promise<%s>;\n\n", m.GetName(), qualifiedToCanonical(m.GetInputType()), qualifiedToCanonical(m.GetOutputType()))
+			url := "/twirp/" + fd.GetPackage() + "." + s.GetName() + "/" + m.GetName()
+			body := indentLines(1, strings.Join([]string{
+				fmt.Sprintf(`return this.f(this.baseUrl + "%s", {method: "POST", body: JSON.stringify(req), headers: {"Content-Type": "application/json"}}).then(response => {`, url),
+				`  if (response.status >= 200 && response.status < 300) {`,
+				`    return response.json();`,
+				`  }`,
+				`  throw response`,
+				`});`,
+				"",
+			}, "\n"))
+			mname := strings.ToLower(m.GetName()[0:1]) + m.GetName()[1:]
+			def := fmt.Sprintf("%s(req: %s): Promise<%s> {\n%s}\n", mname, qualifiedToCanonical(m.GetInputType()), qualifiedToCanonical(m.GetOutputType()), body)
 			o.Printf(indentLines(1, strings.TrimRight(comment+def, "\n")) + "\n\n")
 		}
 		o.Printf("}\n\n")
@@ -408,10 +422,18 @@ func (g *Gen) Generate(fd *d.FileDescriptorProto) *plugin.CodeGeneratorResponse 
 
 // GetTypeName of the given field.
 func (g *Gen) GetTypeName(f *d.FieldDescriptorProto) string {
-	if f.GetLabel() == d.FieldDescriptorProto_LABEL_REPEATED {
-		return g.getRawTypeName(f) + "[]"
+	rawType := g.getRawTypeName(f)
+	if m, ok := g.m[rawType]; ok {
+		if m.GetOptions().GetMapEntry() {
+			keyType := g.GetTypeName(m.GetField()[0])
+			valueType := g.GetTypeName(m.GetField()[1])
+			return fmt.Sprintf(`{[key: %s]: %s}`, keyType, valueType)
+		}
 	}
-	return g.getRawTypeName(f)
+	if f.GetLabel() == d.FieldDescriptorProto_LABEL_REPEATED {
+		return rawType + "[]"
+	}
+	return rawType
 }
 
 func (g *Gen) getRawTypeName(f *d.FieldDescriptorProto) string {
@@ -460,11 +482,11 @@ func (g *Gen) getRawTypeName(f *d.FieldDescriptorProto) string {
 func wellKnownToTS(typeName string) string {
 	switch typeName {
 	case ".google.protobuf.Timestamp":
-		return "string"
+		return "Date"
 	case ".google.protobuf.Struct":
 		return "{}"
 	case ".google.protobuf.FieldMask":
-		return "string[]"
+		return "{ paths: string[] }"
 	case ".google.protobuf.DoubleValue":
 		fallthrough
 	case ".google.protobuf.Int32Value":
