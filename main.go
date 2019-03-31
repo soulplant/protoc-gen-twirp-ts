@@ -17,7 +17,6 @@ import (
 
 // TODO
 // - [ ] Implement service
-// - [ ] Emit camelCase names
 
 type file struct {
 	buf *bytes.Buffer
@@ -358,7 +357,7 @@ func (g *Gen) Generate(fd *d.FileDescriptorProto) *plugin.CodeGeneratorResponse 
 					comment = makeComment(loc.GetLeadingComments())
 					comTrail = "  " + strings.TrimRight(makeComment(loc.GetTrailingComments()), "\n")
 				}
-				o.Printf(indentLines(1, fmt.Sprintf("%s%s?: %s;%s", comment, f.GetName(), g.GetTypeName(f), comTrail)))
+				o.Printf(indentLines(1, fmt.Sprintf("%s%s?: %s;%s", comment, f.GetJsonName(), g.GetTypeName(f), comTrail)))
 				o.Printf("\n")
 			}
 			o.Printf("};\n\n")
