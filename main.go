@@ -485,11 +485,11 @@ func (g *Gen) getRawTypeName(f *d.FieldDescriptorProto) string {
 func wellKnownToTS(typeName string) string {
 	switch typeName {
 	case ".google.protobuf.Timestamp":
-		return "Date"
+		return "Date | null"
 	case ".google.protobuf.Struct":
-		return "{}"
+		return "{} | null"
 	case ".google.protobuf.FieldMask":
-		return "{ paths: string[] }"
+		return "{ paths: string[] } | null"
 	case ".google.protobuf.DoubleValue":
 		fallthrough
 	case ".google.protobuf.Int32Value":
