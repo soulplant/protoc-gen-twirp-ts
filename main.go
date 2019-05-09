@@ -306,6 +306,7 @@ func qualifiedToCanonical(typeName string) string {
 // Generate a response.
 func (g *Gen) Generate(fd *d.FileDescriptorProto) *plugin.CodeGeneratorResponse {
 	o := &file{buf: bytes.NewBufferString("")}
+	o.Printf("/* eslint-disable */\n")
 	o.Printf("// tslint:disable\n\n")
 	for _, loc := range fd.GetSourceCodeInfo().GetLocation() {
 		name := locateInFile(fd, loc)
